@@ -1,0 +1,2 @@
+- daca i se da release la un semafor, urmatorul client care asteapta asta sa fie notificat ca poate
+da LOCK la semaforul respectiv
