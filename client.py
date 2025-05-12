@@ -4,10 +4,13 @@ HOST = 'localhost'
 PORT = 12345
 
 def main():
+    username = input("Introdu numele tău de utilizator: ").strip()
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
             sock.connect((HOST, PORT))
             print(f"[CLIENT] Conectat la serverul {HOST}:{PORT}")
+            sock.sendall(f"USERNAME {username}".encode())
         except Exception as e:
             print(f"[EROARE] Nu m-am putut conecta la server: {e}")
             return

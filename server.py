@@ -6,6 +6,7 @@ PORT = 12345
 
 # Structura semafoarelor: { 'semafor1': {'holder': client_socket, 'queue': [client1, client2]} }
 semaphores = {}
+clients = {} 
 lock = threading.Lock()  # Protejăm accesul la dicționarul de semafoare
 
 
@@ -13,6 +14,15 @@ def handle_client(client_socket, address):
     print(f"[+] Client conectat: {address}")
 
     try:
+        username_data = client_socket.recv(1024).decode()
+        if not username_data.startswith("USERNAME "):
+            client_socket.sendall(b"ERROR Trebuie trimis USERNAME la inceput.\n")
+            client_socket.close()
+            return
+
+        username = username_data.strip().split(" ", 1)[1]
+        clients[client_socket] = username
+        print(f"[+] Client conectat: {username} ({address})")
         while True:
             data = client_socket.recv(1024).decode()
             if not data:
