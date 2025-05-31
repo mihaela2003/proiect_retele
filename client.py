@@ -1,37 +1,203 @@
 import socket
+import threading
+import time
 
 HOST = 'localhost'
 PORT = 12345
 
-def main():
-    username = input("Introdu numele tău de utilizator: ").strip()
+class SemaphoreClient:
+    def __init__(self):
+        self.sock = None
+        self.connected = False
+        self.username = ""
+        self.running = True
+    
+    def connect(self):
+        """Connect to the semaphore server"""
+        self.username = input("Introdu numele tău de utilizator: ").strip()
+        if not self.username:
+            print("[EROARE] Username-ul nu poate fi gol!")
+            return False
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
-            sock.connect((HOST, PORT))
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((HOST, PORT))
             print(f"[CLIENT] Conectat la serverul {HOST}:{PORT}")
-            sock.sendall(f"USERNAME {username}".encode())
+            
+            self.sock.sendall(f"USERNAME {self.username}".encode())
+            self.connected = True
+            
+            receiver_thread = threading.Thread(target=self.receive_messages, daemon=True)
+            receiver_thread.start()
+            
+            return True
+            
         except Exception as e:
             print(f"[EROARE] Nu m-am putut conecta la server: {e}")
-            return
-
-        while True:
-            command = input("Introdu comanda (LOCK/RELEASE nume_semafor sau EXIT): ").strip()
-            if command.upper() == "EXIT":
-                print("[CLIENT] Închidere conexiune.")
-                break
-
-            sock.sendall(command.encode())
-
+            return False
+    
+    def receive_messages(self):
+        """Continuously receive messages from server"""
+        while self.running and self.connected:
             try:
-                response = sock.recv(1024).decode()
+                response = self.sock.recv(4096).decode()
                 if not response:
                     print("[CLIENT] Serverul a închis conexiunea.")
+                    self.connected = False
                     break
-                print(f"[SERVER] {response.strip()}")
+                
+                lines = response.strip().split('\n')
+                for line in lines:
+                    if line.strip():
+                        self.handle_server_message(line.strip())
+                        
             except Exception as e:
-                print(f"[EROARE] La primirea răspunsului: {e}")
+                if self.running:
+                    print(f"[EROARE] La primirea răspunsului: {e}")
+                self.connected = False
                 break
+    
+    def handle_server_message(self, message):
+        """Handle different types of server messages"""
+        if message == "PING":
+            try:
+                self.sock.sendall(b"PONG")
+            except:
+                pass
+            return
+        
+        if message.endswith("_RESPONSE"):
+            return 
+        
+        if message.startswith(("LOCK_GRANTED", "LOCK_DENIED", "RELEASE_OK", "RELEASE_DENIED")):
+            print(f"\n[SERVER] {message}")
+            self.show_prompt()
+        elif message.startswith("ERROR"):
+            print(f"\n[EROARE] {message[6:]}")  
+            self.show_prompt()
+        elif message.startswith(("LIST_RESPONSE", "INFO_RESPONSE", "STATS_RESPONSE", "HELP_RESPONSE")):
+            pass
+        else:
+            lines = message.split('\\n')
+            for line in lines:
+                if line.strip():
+                    print(f"[SERVER] {line}")
+    
+    def show_prompt(self):
+        """Show the command prompt"""
+        print("Comenzi disponibile: LOCK <nume>, RELEASE <nume>, INFO <nume>, LIST, STATS, HELP, EXIT")
+        print("Introdu comanda: ", end="", flush=True)
+    
+    def send_command(self, command):
+        """Send a command to the server"""
+        if not self.connected:
+            print("[EROARE] Nu ești conectat la server!")
+            return False
+        
+        try:
+            self.sock.sendall(command.encode())
+            return True
+        except Exception as e:
+            print(f"[EROARE] Nu am putut trimite comanda: {e}")
+            self.connected = False
+            return False
+    
+    def wait_for_response(self, response_type, timeout=5):
+        """Wait for a specific type of response"""
+        start_time = time.time()
+        response_lines = []
+        
+        while time.time() - start_time < timeout:
+            try:
+                if not self.connected:
+                    break
+                    
+                data = self.sock.recv(4096).decode()
+                if not data:
+                    break
+                
+                lines = data.strip().split('\n')
+                collecting = False
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                        
+                    if line == response_type:
+                        collecting = True
+                        continue
+                    
+                    if collecting:
+                        if line.startswith(("LOCK_", "RELEASE_", "ERROR", "LIST_RESPONSE", "INFO_RESPONSE", "STATS_RESPONSE", "HELP_RESPONSE")):
+                            if line != response_type:
+                                # End of our response
+                                return '\n'.join(response_lines)
+                        response_lines.append(line)
+                
+                if collecting and response_lines:
+                    return '\n'.join(response_lines)
+                    
+            except:
+                break
+        
+        return None
+    
+    def run(self):
+        """Main client loop"""
+        if not self.connect():
+            return
+        
+        print(f"\n[CLIENT] Conectat cu succes ca '{self.username}'!")
+        self.show_prompt()
+        
+        try:
+            while self.running and self.connected:
+                try:
+                    command = input().strip()
+                    
+                    if not command:
+                        continue
+                    
+                    if command.upper() == "EXIT":
+                        print("[CLIENT] Închidere conexiune.")
+                        break
+                    
+                    cmd_upper = command.upper()
+                    if cmd_upper in ["LIST", "STATS", "HELP"] or cmd_upper.startswith("INFO "):
+                        if self.send_command(command):
+                            time.sleep(0.5)
+                        continue
+                    
+                    if self.send_command(command):
+                        pass
+                    
+                except KeyboardInterrupt:
+                    print("\n[CLIENT] Întrerupere de la tastatură.")
+                    break
+                except EOFError:
+                    print("\n[CLIENT] Input închis.")
+                    break
+                except Exception as e:
+                    print(f"[EROARE] {e}")
+                    
+        finally:
+            self.running = False
+            self.connected = False
+            if self.sock:
+                try:
+                    self.sock.close()
+                except:
+                    pass
+            print("[CLIENT] Deconectat.")
+
+def main():
+    """Main function to start the client"""
+    print("=== Client Semafoare Distribuite ===")
+    print("Conectare la server...")
+    
+    client = SemaphoreClient()
+    client.run()
 
 if __name__ == "__main__":
     main()
