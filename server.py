@@ -33,7 +33,6 @@ stats = {
 }
 
 def send_heartbeat():
-    """Periodically check client connections"""
     while True:
         time.sleep(10) 
         with lock:
@@ -48,10 +47,9 @@ def send_heartbeat():
         
             for client_socket in dead_clients:
                 cleanup_client(client_socket)
-                logging.warning(f"Removed dead client: {clients.get(client_socket, 'Unknown')}")
+                logging.warning(f"Stergere clienti morti: {clients.get(client_socket, 'Unknown')}")
 
 def cleanup_client(client_socket):
-    """Clean up client from all semaphores and tracking"""
     username = clients.get(client_socket, 'Unknown')
     
     for sem_name, sem in semaphores.items():
@@ -62,17 +60,17 @@ def cleanup_client(client_socket):
                 sem['acquired_time'] = time.time()
                 try:
                     next_client.sendall(f"LOCK_GRANTED {sem_name}\n".encode())
-                    logging.info(f"Semaphore {sem_name} transferred to next client in queue")
+                    logging.info(f"Semaforul {sem_name} a fost transferat urmatorului client din coada")
                 except:
                     sem['holder'] = None
-                    logging.warning(f"Next client in queue for {sem_name} was also disconnected")
+                    logging.warning(f"Urmatorul client pentru semaforul {sem_name} a fost, de asemenea, deconectat")
             else:
                 sem['holder'] = None
-                logging.info(f"Semaphore {sem_name} released due to client disconnect")
+                logging.info(f"Semaforul {sem_name} a fost eliberat deoarece clientul s-a deconectat")
         
         if client_socket in sem['queue']:
             sem['queue'].remove(client_socket)
-            logging.info(f"Removed {username} from queue for semaphore {sem_name}")
+            logging.info(f"Utilizatorul {username} a fost scos din coada pentru semaforul {sem_name}")
     
     if client_socket in clients:
         del clients[client_socket]
@@ -82,34 +80,32 @@ def cleanup_client(client_socket):
     stats['active_connections'] -= 1
 
 def get_semaphore_info(sem_name):
-    """Get detailed information about a semaphore"""
     if sem_name not in semaphores:
-        return f"Semaphore '{sem_name}' does not exist"
+        return f"Semaforul '{sem_name}' nu exista"
     
     sem = semaphores[sem_name]
     holder_name = clients.get(sem['holder'], 'Unknown') if sem['holder'] else 'None'
     queue_size = len(sem['queue'])
     
-    info = f"Semaphore '{sem_name}':\n"
-    info += f"  Holder: {holder_name}\n"
-    info += f"  Queue size: {queue_size}\n"
+    info = f"Semafor '{sem_name}':\n"
+    info += f"  Detinator: {holder_name}\n"
+    info += f"  Dimensiunea coadei: {queue_size}\n"
     
     if sem['holder']:
         held_time = int(time.time() - sem.get('acquired_time', time.time()))
-        info += f"  Hold time: {held_time} seconds\n"
+        info += f"  Timp de detinere: {held_time} seconds\n"
     
     if sem['queue']:
         queue_names = [clients.get(client, 'Unknown') for client in sem['queue']]
-        info += f"  Queue: {', '.join(queue_names)}\n"
+        info += f"  Coada: {', '.join(queue_names)}\n"
     
     return info
 
 def list_all_semaphores():
-    """List all semaphores with basic info"""
     if not semaphores:
-        return "No semaphores exist"
+        return "Nu exista niciun semafor"
     
-    result = "All semaphores:\n"
+    result = "Toate semafoarele:\n"
     for name, sem in semaphores.items():
         holder_name = clients.get(sem['holder'], 'Unknown') if sem['holder'] else 'Free'
         queue_size = len(sem['queue'])
@@ -118,22 +114,20 @@ def list_all_semaphores():
     return result
 
 def get_server_stats():
-    """Get server statistics"""
     uptime = int(time.time() - stats['server_start_time'])
     hours, remainder = divmod(uptime, 3600)
     minutes, seconds = divmod(remainder, 60)
     
-    result = "Server Statistics:\n"
-    result += f"  Uptime: {hours:02d}:{minutes:02d}:{seconds:02d}\n"
-    result += f"  Active connections: {stats['active_connections']}\n"
-    result += f"  Total requests: {stats['total_requests']}\n"
-    result += f"  Semaphores created: {stats['semaphores_created']}\n"
-    result += f"  Active semaphores: {len(semaphores)}\n"
+    result += f"  Ora: {hours:02d}:{minutes:02d}:{seconds:02d}\n"
+    result += f"  Conexiuni active: {stats['active_connections']}\n"
+    result += f"  Numarul total de requesturi: {stats['total_requests']}\n"
+    result += f"  Numarul de semafoare create: {stats['semaphores_created']}\n"
+    result += f"  Numarul de semafoare active: {len(semaphores)}\n"
     
     return result
 
 def handle_client(client_socket, address):
-    logging.info(f"New client connected from {address}")
+    logging.info(f"Un nou client s-a conectat la adresa: {address}")
     
     try:
         username_data = client_socket.recv(1024).decode()
@@ -147,7 +141,7 @@ def handle_client(client_socket, address):
         client_last_ping[client_socket] = time.time()
         stats['active_connections'] += 1
         
-        logging.info(f"Client registered: {username} from {address}")
+        logging.info(f"Client inregistrat: {username} de la adresa {address}")
         print(f"[+] Client conectat: {username} ({address})")
         
         while True:
@@ -160,7 +154,7 @@ def handle_client(client_socket, address):
                 client_last_ping[client_socket] = time.time()
                 continue
             
-            logging.info(f"Command from {username}: {data}")
+            logging.info(f"Comanda de la {username}: {data}")
             print(f"[{address}] Mesaj primit: {data}")
             
             stats['total_requests'] += 1
@@ -183,14 +177,14 @@ def handle_client(client_socket, address):
                 continue
             
             elif command == "HELP":
-                help_text = """Available commands:
-                            LOCK <semaphore_name> - Request exclusive access to semaphore
-                            RELEASE <semaphore_name> - Release semaphore
-                            INFO <semaphore_name> - Get detailed info about semaphore
-                            LIST - List all semaphores
-                            STATS - Show server statistics
-                            HELP - Show this help message
-                            EXIT - Disconnect from server"""
+                help_text = """Comenzile disponibile:
+                            LOCK <semaphore_name> - Cere acces la semafor
+                            RELEASE <semaphore_name> - Elibereaza semafor
+                            INFO <semaphore_name> - Detalii despre semafor
+                            LIST - Lista cu toate semafoarele
+                            STATS - Arata statistici despre server
+                            HELP - Mesaj de ajutor
+                            EXIT - Deconectare de la server"""
                 client_socket.sendall(f"HELP_RESPONSE\n{help_text}\n".encode())
                 continue
             
@@ -213,7 +207,7 @@ def handle_client(client_socket, address):
                         'acquired_time': None
                     }
                     stats['semaphores_created'] += 1
-                    logging.info(f"Created new semaphore: {sem_name}")
+                    logging.info(f"A fost creat un nou semafor: {sem_name}")
 
                 sem = semaphores[sem_name]
 
@@ -222,13 +216,13 @@ def handle_client(client_socket, address):
                         sem['holder'] = client_socket
                         sem['acquired_time'] = time.time()
                         client_socket.sendall(f"LOCK_GRANTED {sem_name}\n".encode())
-                        logging.info(f"Lock granted for semaphore {sem_name} to {username}")
+                        logging.info(f"Blocare garantata a semaforului {sem_name} pentru {username}")
                         print(f"[{sem_name}] Acces acordat clientului {username}")
                     else:
                         sem['queue'].append(client_socket)
                         position = len(sem['queue'])
-                        client_socket.sendall(f"LOCK_DENIED {sem_name} (Position in queue: {position})\n".encode())
-                        logging.info(f"Lock denied for semaphore {sem_name} to {username}, added to queue (position {position})")
+                        client_socket.sendall(f"LOCK_DENIED {sem_name} (Pozitia in coada: {position})\n".encode())
+                        logging.info(f"Blocare refuzata a semaforului {sem_name} pentru {username}. Ati fost adaugat in coada de asteptare (pozitia {position})")
                         print(f"[{sem_name}] Clientul {username} adaugat in coada (pozitia {position})")
 
                 elif command == "RELEASE":
@@ -242,21 +236,21 @@ def handle_client(client_socket, address):
                             try:
                                 next_client.sendall(f"LOCK_GRANTED {sem_name}\n".encode())
                                 next_username = clients.get(next_client, 'Unknown')
-                                logging.info(f"Semaphore {sem_name} transferred from {username} to {next_username} (held for {hold_time}s)")
+                                logging.info(f"Semaforul {sem_name} a fost transferat de la {username} la {next_username} (a fost detinut timp de {hold_time}s)")
                             except:
                                 sem['holder'] = None
                                 sem['acquired_time'] = None
-                                logging.warning(f"Next client for semaphore {sem_name} was disconnected")
+                                logging.warning(f"Urmatorul client al semaforului {sem_name} s-a deconectat")
                         else:
                             sem['holder'] = None
                             sem['acquired_time'] = None
-                            logging.info(f"Semaphore {sem_name} released by {username} (held for {hold_time}s)")
+                            logging.info(f"Semaforul {sem_name} a fost eliberat de  {username} (a fost detinut timp de {hold_time}s)")
                         
                         client_socket.sendall(f"RELEASE_OK {sem_name}\n".encode())
                         print(f"[{sem_name}] S-a eliberat semaforul de catre {username}")
                     else:
-                        client_socket.sendall(f"RELEASE_DENIED {sem_name} (You don't hold this semaphore)\n".encode())
-                        logging.warning(f"Invalid release attempt for semaphore {sem_name} by {username}")
+                        client_socket.sendall(f"RELEASE_DENIED {sem_name} (Nu detii acest semafor)\n".encode())
+                        logging.warning(f"Incercare de eliberare invalida pentru semaforul {sem_name} de catre {username}")
                 
                 else:
                     client_socket.sendall(b"ERROR Comanda necunoscuta. Foloseste HELP pentru ajutor.\n")
@@ -274,7 +268,7 @@ def handle_client(client_socket, address):
             pass
         
         logging.info(f"Client disconnected: {address}")
-        print(f"[-] Conexiune închisă: {address}")
+        print(f"[-] Conexiune inchisa: {address}")
 
 
 def start_server():
@@ -283,7 +277,7 @@ def start_server():
     server.bind((HOST, PORT))
     server.listen()
 
-    logging.info(f"Semaphore server started on {HOST}:{PORT}")
+    logging.info(f"Serverul de semafoare: {HOST}:{PORT}")
     print(f"[SERVER] Ascult pe {HOST}:{PORT}...")
     
     heartbeat_thread = threading.Thread(target=send_heartbeat, daemon=True)

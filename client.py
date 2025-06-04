@@ -13,8 +13,7 @@ class SemaphoreClient:
         self.running = True
     
     def connect(self):
-        """Connect to the semaphore server"""
-        self.username = input("Introdu numele tău de utilizator: ").strip()
+        self.username = input("Introdu numele tau de utilizator: ").strip()
         if not self.username:
             print("[EROARE] Username-ul nu poate fi gol!")
             return False
@@ -37,12 +36,11 @@ class SemaphoreClient:
             return False
     
     def receive_messages(self):
-        """Continuously receive messages from server"""
         while self.running and self.connected:
             try:
                 response = self.sock.recv(4096).decode()
                 if not response:
-                    print("[CLIENT] Serverul a închis conexiunea.")
+                    print("[CLIENT] Serverul a inchis conexiunea.")
                     self.connected = False
                     break
                 
@@ -53,12 +51,11 @@ class SemaphoreClient:
                         
             except Exception as e:
                 if self.running:
-                    print(f"[EROARE] La primirea răspunsului: {e}")
+                    print(f"[EROARE] La primirea raspunsului: {e}")
                 self.connected = False
                 break
     
     def handle_server_message(self, message):
-        """Handle different types of server messages"""
         if message == "PING":
             try:
                 self.sock.sendall(b"PONG")
@@ -84,14 +81,12 @@ class SemaphoreClient:
                     print(f"[SERVER] {line}")
     
     def show_prompt(self):
-        """Show the command prompt"""
         print("Comenzi disponibile: LOCK <nume>, RELEASE <nume>, INFO <nume>, LIST, STATS, HELP, EXIT")
         print("Introdu comanda: ", end="", flush=True)
     
     def send_command(self, command):
-        """Send a command to the server"""
         if not self.connected:
-            print("[EROARE] Nu ești conectat la server!")
+            print("[EROARE] Nu esti conectat la server!")
             return False
         
         try:
@@ -103,7 +98,6 @@ class SemaphoreClient:
             return False
     
     def wait_for_response(self, response_type, timeout=5):
-        """Wait for a specific type of response"""
         start_time = time.time()
         response_lines = []
         
@@ -131,7 +125,6 @@ class SemaphoreClient:
                     if collecting:
                         if line.startswith(("LOCK_", "RELEASE_", "ERROR", "LIST_RESPONSE", "INFO_RESPONSE", "STATS_RESPONSE", "HELP_RESPONSE")):
                             if line != response_type:
-                                # End of our response
                                 return '\n'.join(response_lines)
                         response_lines.append(line)
                 
@@ -144,7 +137,6 @@ class SemaphoreClient:
         return None
     
     def run(self):
-        """Main client loop"""
         if not self.connect():
             return
         
@@ -160,7 +152,7 @@ class SemaphoreClient:
                         continue
                     
                     if command.upper() == "EXIT":
-                        print("[CLIENT] Închidere conexiune.")
+                        print("[CLIENT] Inchidere conexiune.")
                         break
                     
                     cmd_upper = command.upper()
@@ -173,10 +165,10 @@ class SemaphoreClient:
                         pass
                     
                 except KeyboardInterrupt:
-                    print("\n[CLIENT] Întrerupere de la tastatură.")
+                    print("\n[CLIENT] Intrerupere de la tastatura.")
                     break
                 except EOFError:
-                    print("\n[CLIENT] Input închis.")
+                    print("\n[CLIENT] Input inchis.")
                     break
                 except Exception as e:
                     print(f"[EROARE] {e}")
@@ -192,8 +184,6 @@ class SemaphoreClient:
             print("[CLIENT] Deconectat.")
 
 def main():
-    """Main function to start the client"""
-    print("=== Client Semafoare Distribuite ===")
     print("Conectare la server...")
     
     client = SemaphoreClient()
